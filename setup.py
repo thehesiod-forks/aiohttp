@@ -83,7 +83,7 @@ tests_require = install_requires + ['pytest', 'gunicorn', 'pytest-timeout']
 
 
 args = dict(
-    name='aiohttp',
+    name='fbn-aiohttp',
     version=version,
     description='Async http client/server framework (asyncio)',
     long_description='\n\n'.join((read('README.rst'), read('CHANGES.rst'))),
