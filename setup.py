@@ -118,6 +118,7 @@ args = dict(
     cmdclass=dict(build_ext=ve_build_ext,
                   test=PyTest))
 
+
 try:
     setup(**args)
 except BuildFailed:
