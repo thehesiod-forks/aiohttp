@@ -73,6 +73,7 @@ class RequestHandler(asyncio.streams.FlowControlMixin, asyncio.Protocol):
 
     def __init__(self, manager, *, loop=None,
                  keepalive_timeout=75,  # NGINX default value is 75 secs
+                 keepalive_request_limit=1000, # Takes precedence over keepalive_timeout
                  tcp_keepalive=True,
                  logger=server_logger,
                  access_log_class=helpers.AccessLogger,
@@ -96,6 +97,7 @@ class RequestHandler(asyncio.streams.FlowControlMixin, asyncio.Protocol):
         self._keepalive_time = None
         self._keepalive_handle = None
         self._keepalive_timeout = keepalive_timeout
+        self._keepalive_request_limit = keepalive_request_limit
         self._lingering_time = float(lingering_time)
 
         self._messages = deque()
@@ -299,7 +301,7 @@ class RequestHandler(asyncio.streams.FlowControlMixin, asyncio.Protocol):
         self.logger.exception(*args, **kw)
 
     def _process_keepalive(self):
-        if self._force_close:
+        if self._force_close or self._keepalive_request_limit is not None:
             return
 
         next = self._keepalive_time + self._keepalive_timeout
@@ -343,6 +345,8 @@ class RequestHandler(asyncio.streams.FlowControlMixin, asyncio.Protocol):
         manager = self._manager
         keepalive_timeout = self._keepalive_timeout
 
+        requests_until_close = self._keepalive_request_limit
+
         while not self._force_close:
             if not self._messages:
                 try:
@@ -384,6 +388,16 @@ class RequestHandler(asyncio.streams.FlowControlMixin, asyncio.Protocol):
                             "(#2415) and will be removed, "
                             "please raise the exception instead",
                             DeprecationWarning)
+
+                requests_until_close -= 1
+                if requests_until_close <= 0:
+                    # We've re-used this connection for too many requests, this will cause
+                    # the response to indicate to the client that it is time to disconnect (and
+                    # reconnect if necessary) after receiving this final response
+                    # NOTE: this is not the same as `await self.force_close()` which tries to
+                    # terminate the TCP connection, this is less aggressive and will just
+                    # ask the client to disconnect
+                    resp.force_close()
 
                 await resp.prepare(request)
                 await resp.write_eof()
