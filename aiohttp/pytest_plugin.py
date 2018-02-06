@@ -17,12 +17,12 @@ from .test_utils import (BaseTestServer, RawTestServer, TestClient, TestServer,
 
 try:
     import uvloop
-except:  # pragma: no cover
+except ImportError:  # pragma: no cover
     uvloop = None
 
 try:
     import tokio
-except:  # pragma: no cover
+except ImportError:  # pragma: no cover
     tokio = None
 
 
@@ -38,7 +38,7 @@ def pytest_addoption(parser):
         help='enable event loop debug mode')
 
 
-def pytest_fixture_setup(fixturedef, request):
+def pytest_fixture_setup(fixturedef):
     """
     Allow fixtures to be coroutines. Run coroutine fixtures in an event loop.
     """
@@ -161,9 +161,7 @@ def pytest_pyfunc_call(pyfuncitem):
             with _passthrough_loop_context(existing_loop, fast=fast) as _loop:
                 testargs = {arg: pyfuncitem.funcargs[arg]
                             for arg in pyfuncitem._fixtureinfo.argnames}
-
-                task = _loop.create_task(pyfuncitem.obj(**testargs))
-                _loop.run_until_complete(task)
+                _loop.run_until_complete(pyfuncitem.obj(**testargs))
 
         return True
 
@@ -225,19 +223,17 @@ def test_server(loop):
     """
     servers = []
 
-    @asyncio.coroutine
-    def go(app, **kwargs):
-        server = TestServer(app)
-        yield from server.start_server(loop=loop, **kwargs)
+    async def go(app, *, port=None, **kwargs):
+        server = TestServer(app, port=port)
+        await server.start_server(loop=loop, **kwargs)
         servers.append(server)
         return server
 
     yield go
 
-    @asyncio.coroutine
-    def finalize():
+    async def finalize():
         while servers:
-            yield from servers.pop().close()
+            await servers.pop().close()
 
     loop.run_until_complete(finalize())
 
@@ -250,19 +246,17 @@ def raw_test_server(loop):
     """
     servers = []
 
-    @asyncio.coroutine
-    def go(handler, **kwargs):
-        server = RawTestServer(handler)
-        yield from server.start_server(loop=loop, **kwargs)
+    async def go(handler, *, port=None, **kwargs):
+        server = RawTestServer(handler, port=port)
+        await server.start_server(loop=loop, **kwargs)
         servers.append(server)
         return server
 
     yield go
 
-    @asyncio.coroutine
-    def finalize():
+    async def finalize():
         while servers:
-            yield from servers.pop().close()
+            await servers.pop().close()
 
     loop.run_until_complete(finalize())
 
@@ -277,8 +271,7 @@ def test_client(loop):
     """
     clients = []
 
-    @asyncio.coroutine
-    def go(__param, *args, server_kwargs=None, **kwargs):
+    async def go(__param, *args, server_kwargs=None, **kwargs):
 
         if isinstance(__param, collections.Callable) and \
                 not isinstance(__param, (Application, BaseTestServer)):
@@ -296,16 +289,15 @@ def test_client(loop):
         else:
             raise ValueError("Unknown argument type: %r" % type(__param))
 
-        yield from client.start_server()
+        await client.start_server()
         clients.append(client)
         return client
 
     yield go
 
-    @asyncio.coroutine
-    def finalize():
+    async def finalize():
         while clients:
-            yield from clients.pop().close()
+            await clients.pop().close()
 
     loop.run_until_complete(finalize())
 

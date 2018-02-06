@@ -23,6 +23,7 @@ Alexandru Mihai
 Alexey Firsov
 Alexey Popravka
 Alexey Stepanov
+Amin Etesamian
 Amy Boyle
 Andrei Ursulenko
 Andrej Antonov
@@ -32,6 +33,7 @@ Andrew Svetlov
 Andrii Soldatenko
 Antoine Pietri
 Anton Kasyanov
+Anton Zhdan-Pushkin
 Arthur Darcet
 Ben Bader
 Benedikt Reinartz
@@ -73,6 +75,7 @@ Erich Healy
 Eugene Chernyshov
 Eugene Naydenov
 Evert Lammerts
+FichteFoll
 Frederik Gladhorn
 Frederik Peter Aalund
 Gabriel Tremblay
@@ -121,6 +124,7 @@ Ludovic Gasc
 Lukasz Marcin Dobrzanski
 Makc Belousow
 Manuel Miranda
+Marat Sharafutdinov
 Marco Paolini
 Mariano Anaya
 Martin Melka
@@ -136,9 +140,11 @@ Morgan Delahaye-Prat
 Moss Collum
 Mun Gwan-gyeong
 Nicolas Braem
+Nikolay Kim
 Nikolay Novik
 Olaf Conradi
 Pahaz Blinov
+Panagiotis Kolokotronis
 Pankaj Pandey
 Pau Freixes
 Paul Colomiets
@@ -154,6 +160,7 @@ Robert Lu
 Roman Podoliaka
 Samuel Colvin
 Sean Hunt
+Sebastien Geffroy
 Sebastian Hanula
 Sebastian Hüther
 SeongSoo Cho
@@ -194,6 +201,8 @@ W. Trevor King
 Will McGugan
 Willem de Groot
 Wilson Ong
+Wei Lin
+Weiwei Wang
 Yannick Koechlin
 Yannick Péroux
 Yegor Roganov

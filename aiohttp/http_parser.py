@@ -14,7 +14,7 @@ from .http_exceptions import (BadStatusLine, ContentEncodingError,
                               TransferEncodingError)
 from .http_writer import HttpVersion, HttpVersion10
 from .log import internal_logger
-from .streams import EMPTY_PAYLOAD, FlowControlStreamReader
+from .streams import EMPTY_PAYLOAD, StreamReader
 
 
 try:
@@ -102,7 +102,7 @@ class HttpParser:
                     self._lines.append('')
                 try:
                     return self.parse_message(self._lines)
-                except:
+                except Exception:
                     return None
 
     def feed_data(self, data,
@@ -164,7 +164,7 @@ class HttpParser:
                         # calculate payload
                         if ((length is not None and length > 0) or
                                 msg.chunked and not msg.upgrade):
-                            payload = FlowControlStreamReader(
+                            payload = StreamReader(
                                 self.protocol, timer=self.timer, loop=loop)
                             payload_parser = HttpPayloadParser(
                                 payload, length=length,
@@ -176,7 +176,7 @@ class HttpParser:
                             if not payload_parser.done:
                                 self._payload_parser = payload_parser
                         elif method == METH_CONNECT:
-                            payload = FlowControlStreamReader(
+                            payload = StreamReader(
                                 self.protocol, timer=self.timer, loop=loop)
                             self._upgraded = True
                             self._payload_parser = HttpPayloadParser(
@@ -186,7 +186,7 @@ class HttpParser:
                         else:
                             if (getattr(msg, 'code', 100) >= 199 and
                                     length is None and self.read_until_eof):
-                                payload = FlowControlStreamReader(
+                                payload = StreamReader(
                                     self.protocol, timer=self.timer, loop=loop)
                                 payload_parser = HttpPayloadParser(
                                     payload, length=length,
@@ -372,7 +372,7 @@ class HttpRequestParserPy(HttpParser):
                 version = HttpVersion(int(n1), int(n2))
             else:
                 raise BadStatusLine(version)
-        except:
+        except Exception:
             raise BadStatusLine(version)
 
         # read headers

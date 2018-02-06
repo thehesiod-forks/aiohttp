@@ -1,4 +1,3 @@
-import asyncio
 import re
 
 from aiohttp.web_exceptions import HTTPMovedPermanently
@@ -11,11 +10,10 @@ __all__ = (
 )
 
 
-@asyncio.coroutine
-def _check_request_resolves(request, path):
+async def _check_request_resolves(request, path):
     alt_request = request.clone(rel_url=path)
 
-    match_info = yield from request.app.router.resolve(alt_request)
+    match_info = await request.app.router.resolve(alt_request)
     alt_request._match_info = match_info
 
     if not isinstance(match_info.route, SystemRoute):
@@ -52,15 +50,13 @@ def normalize_path_middleware(
     path into one.
     """
 
-    @asyncio.coroutine
     @middleware
-    def impl(request, handler):
+    async def impl(request, handler):
         if isinstance(request.match_info.route, SystemRoute):
             paths_to_check = []
             if '?' in request.raw_path:
                 path, query = request.raw_path.split('?', 1)
-                if query:
-                    query = '?' + query
+                query = '?' + query
             else:
                 query = ''
                 path = request.raw_path
@@ -74,12 +70,12 @@ def normalize_path_middleware(
                     re.sub('//+', '/', path + '/'))
 
             for path in paths_to_check:
-                resolves, request = yield from _check_request_resolves(
+                resolves, request = await _check_request_resolves(
                     request, path)
                 if resolves:
-                    return redirect_class(request.path + query)
+                    raise redirect_class(request.path + query)
 
-        return (yield from handler(request))
+        return await handler(request)
 
     return impl
 
@@ -87,8 +83,7 @@ def normalize_path_middleware(
 def _fix_request_current_app(app):
 
     @middleware
-    @asyncio.coroutine
-    def impl(request, handler):
+    async def impl(request, handler):
         with request.match_info.set_current_app(app):
-            return (yield from handler(request))
+            return await handler(request)
     return impl

@@ -3,14 +3,15 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-===============================================================
-aiohttp: Asynchronous HTTP Client/Server for Python and asyncio
-===============================================================
+==================
+Welcome to AIOHTTP
+==================
 
-HTTP client/server for :term:`asyncio` and Python.
+Asynchronous HTTP Client/Server for :term:`asyncio` and Python.
+
+Current version is |release|.
 
 .. _GitHub: https://github.com/aio-libs/aiohttp
-.. _Freenode: http://freenode.net
 
 
 Key Features
@@ -21,6 +22,8 @@ Key Features
   :ref:`Client WebSockets <aiohttp-client-websockets>` out-of-the-box.
 - Web-server has :ref:`aiohttp-web-middlewares`,
   :ref:`aiohttp-web-signals` and pluggable routing.
+
+.. _aiohttp-installation:
 
 Library Installation
 ====================
@@ -54,7 +57,7 @@ Client example::
     import async_timeout
 
     async def fetch(session, url):
-        with async_timeout.timeout(10):
+        async with async_timeout.timeout(10):
             async with session.get(url) as response:
                 return await response.text()
 
@@ -81,23 +84,9 @@ Server example::
 
     web.run_app(app)
 
-.. note::
 
-   Throughout this documentation, examples utilize the `async/await` syntax
-   introduced by :pep:`492` that is only valid for Python 3.5+.
-
-   If you are using Python 3.4, please replace ``await`` with
-   ``yield from`` and ``async def`` with a ``@coroutine`` decorator.
-   For example, this::
-
-       async def coro(...):
-           ret = await f()
-
-   should be replaced by::
-
-       @asyncio.coroutine
-       def coro(...):
-           ret = yield from f()
+For more information please visit :ref:`aiohttp-client` and
+:ref:`aiohttp-web` pages.
 
 
 Tutorial
@@ -122,7 +111,7 @@ Continuous Integration.
 Dependencies
 ============
 
-- Python 3.4.2+
+- Python 3.5.3+
 - *chardet*
 - *multidict*
 - *async_timeout*
@@ -198,4 +187,13 @@ these changes as rare as possible.
 Table Of Contents
 =================
 
-To see the full table of contents open the :ref:`link <mastertoc>`.
+.. toctree::
+   :name: mastertoc
+
+   client
+   web
+   utilities
+   faq
+   misc
+   external
+   contributing
