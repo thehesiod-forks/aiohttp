@@ -1,4 +1,4 @@
-import asyncio
+import collections
 import datetime
 import enum
 import json
@@ -7,12 +7,12 @@ import time
 import warnings
 import zlib
 from email.utils import parsedate
+from http.cookies import SimpleCookie
 
 from multidict import CIMultiDict, CIMultiDictProxy
 
 from . import hdrs, payload
-from .helpers import (HeadersMixin, SimpleCookie, rfc822_formatted_time,
-                      sentinel)
+from .helpers import HeadersMixin, rfc822_formatted_time, sentinel
 from .http import RESPONSES, SERVER_SOFTWARE, HttpVersion10, HttpVersion11
 
 
@@ -34,7 +34,7 @@ class ContentCoding(enum.Enum):
 ############################################################
 
 
-class StreamResponse(HeadersMixin):
+class StreamResponse(collections.MutableMapping, HeadersMixin):
 
     _length_check = True
 
@@ -50,6 +50,7 @@ class StreamResponse(HeadersMixin):
         self._payload_writer = None
         self._eof_sent = False
         self._body_length = 0
+        self._state = {}
 
         if headers is not None:
             self._headers = CIMultiDict(headers)
@@ -90,7 +91,7 @@ class StreamResponse(HeadersMixin):
         if reason is None:
             try:
                 reason = _RESPONSES[self._status][0]
-            except:
+            except Exception:
                 reason = ''
         self._reason = reason
 
@@ -262,33 +263,6 @@ class StreamResponse(HeadersMixin):
         elif isinstance(value, str):
             self.headers[hdrs.LAST_MODIFIED] = value
 
-    @property
-    def tcp_nodelay(self):
-        payload_writer = self._payload_writer
-        assert payload_writer is not None, \
-            "Cannot get tcp_nodelay for not prepared response"
-        return payload_writer.tcp_nodelay
-
-    def set_tcp_nodelay(self, value):
-        payload_writer = self._payload_writer
-        assert payload_writer is not None, \
-            "Cannot set tcp_nodelay for not prepared response"
-        payload_writer.set_tcp_nodelay(value)
-
-    @property
-    def tcp_cork(self):
-        payload_writer = self._payload_writer
-        assert payload_writer is not None, \
-            "Cannot get tcp_cork for not prepared response"
-        return payload_writer.tcp_cork
-
-    def set_tcp_cork(self, value):
-        payload_writer = self._payload_writer
-        assert payload_writer is not None, \
-            "Cannot set tcp_cork for not prepared response"
-
-        payload_writer.set_tcp_cork(value)
-
     def _generate_content_type_header(self, CONTENT_TYPE=hdrs.CONTENT_TYPE):
         params = '; '.join("%s=%s" % i for i in self._content_dict.items())
         if params:
@@ -316,14 +290,13 @@ class StreamResponse(HeadersMixin):
                     self._do_start_compression(coding)
                     return
 
-    @asyncio.coroutine
-    def prepare(self, request):
+    async def prepare(self, request):
         if self._eof_sent:
             return
         if self._payload_writer is not None:
             return self._payload_writer
 
-        yield from request._prepare_hook(self)
+        await request._prepare_hook(self)
         return self._start(request)
 
     def _start(self, request,
@@ -345,7 +318,7 @@ class StreamResponse(HeadersMixin):
         self._keep_alive = keep_alive
 
         version = request.version
-        writer = self._payload_writer = request._writer
+        writer = self._payload_writer = request._payload_writer
 
         headers = self._headers
         for cookie in self._cookies.values():
@@ -395,7 +368,7 @@ class StreamResponse(HeadersMixin):
 
         return writer
 
-    def write(self, data):
+    async def write(self, data):
         assert isinstance(data, (bytes, bytearray, memoryview)), \
             "data argument must be byte-ish (%r)" % type(data)
 
@@ -404,17 +377,18 @@ class StreamResponse(HeadersMixin):
         if self._payload_writer is None:
             raise RuntimeError("Cannot call write() before prepare()")
 
-        return self._payload_writer.write(data)
+        await self._payload_writer.write(data)
 
-    @asyncio.coroutine
-    def drain(self):
+    async def drain(self):
         assert not self._eof_sent, "EOF has already been sent"
         assert self._payload_writer is not None, \
             "Response has not been started"
-        yield from self._payload_writer.drain()
+        warnings.warn("drain method is deprecated, use await resp.write()",
+                      DeprecationWarning,
+                      stacklevel=2)
+        await self._payload_writer.drain()
 
-    @asyncio.coroutine
-    def write_eof(self, data=b''):
+    async def write_eof(self, data=b''):
         assert isinstance(data, (bytes, bytearray, memoryview)), \
             "data argument must be byte-ish (%r)" % type(data)
 
@@ -424,7 +398,7 @@ class StreamResponse(HeadersMixin):
         assert self._payload_writer is not None, \
             "Response has not been started"
 
-        yield from self._payload_writer.write_eof(data)
+        await self._payload_writer.write_eof(data)
         self._eof_sent = True
         self._req = None
         self._body_length = self._payload_writer.output_size
@@ -439,6 +413,24 @@ class StreamResponse(HeadersMixin):
             info = "not prepared"
         return "<{} {} {}>".format(self.__class__.__name__,
                                    self.reason, info)
+
+    def __getitem__(self, key):
+        return self._state[key]
+
+    def __setitem__(self, key, value):
+        self._state[key] = value
+
+    def __delitem__(self, key):
+        del self._state[key]
+
+    def __len__(self):
+        return len(self._state)
+
+    def __iter__(self):
+        return iter(self._state)
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 class Response(StreamResponse):
@@ -583,8 +575,7 @@ class Response(StreamResponse):
     def content_length(self, value):
         raise RuntimeError("Content length is set automatically")
 
-    @asyncio.coroutine
-    def write_eof(self):
+    async def write_eof(self):
         if self._eof_sent:
             return
         if self._compressed_body is not None:
@@ -594,14 +585,14 @@ class Response(StreamResponse):
         if body is not None:
             if (self._req._method == hdrs.METH_HEAD or
                     self._status in [204, 304]):
-                yield from super().write_eof()
+                await super().write_eof()
             elif self._body_payload:
-                yield from body.write(self._payload_writer)
-                yield from super().write_eof()
+                await body.write(self._payload_writer)
+                await super().write_eof()
             else:
-                yield from super().write_eof(body)
+                await super().write_eof(body)
         else:
-            yield from super().write_eof()
+            await super().write_eof()
 
     def _start(self, request):
         if not self._chunked and hdrs.CONTENT_LENGTH not in self._headers:
