@@ -2,7 +2,7 @@
 #
 # Based on https://github.com/MagicStack/httptools
 #
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython cimport PyObject_GetBuffer, PyBuffer_Release, PyBUF_SIMPLE, \
                      Py_buffer, PyBytes_AsString
@@ -16,7 +16,7 @@ from .http_exceptions import (
     PayloadEncodingError, ContentLengthError, TransferEncodingError)
 from .http_writer import HttpVersion, HttpVersion10, HttpVersion11
 from .http_parser import RawRequestMessage, RawResponseMessage, DeflateBuffer
-from .streams import EMPTY_PAYLOAD, FlowControlStreamReader
+from .streams import EMPTY_PAYLOAD, StreamReader
 
 cimport cython
 from . cimport _cparser as cparser
@@ -201,7 +201,7 @@ cdef class HttpParser:
 
         if (self._cparser.content_length > 0 or chunked or
                 self._cparser.method == 5):  # CONNECT: 5
-            payload = FlowControlStreamReader(
+            payload = StreamReader(
                 self._protocol, timer=self._timer, loop=self._loop)
         else:
             payload = EMPTY_PAYLOAD
@@ -558,6 +558,8 @@ def _parse_url(char* buf_data, size_t length):
 
     parsed = <cparser.http_parser_url*> \
                         PyMem_Malloc(sizeof(cparser.http_parser_url))
+    if parsed is NULL:
+        raise MemoryError()
     cparser.http_parser_url_init(parsed)
     try:
         res = cparser.http_parser_parse_url(buf_data, length, 0, parsed)

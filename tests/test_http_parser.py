@@ -93,23 +93,21 @@ def test_parse(parser):
     assert msg.version == (1, 1)
 
 
-@asyncio.coroutine
-def test_parse_body(parser):
+async def test_parse_body(parser):
     text = b'GET /test HTTP/1.1\r\nContent-Length: 4\r\n\r\nbody'
     messages, upgrade, tail = parser.feed_data(text)
     assert len(messages) == 1
     _, payload = messages[0]
-    body = yield from payload.read(4)
+    body = await payload.read(4)
     assert body == b'body'
 
 
-@asyncio.coroutine
-def test_parse_body_with_CRLF(parser):
+async def test_parse_body_with_CRLF(parser):
     text = b'\r\nGET /test HTTP/1.1\r\nContent-Length: 4\r\n\r\nbody'
     messages, upgrade, tail = parser.feed_data(text)
     assert len(messages) == 1
     _, payload = messages[0]
-    body = yield from payload.read(4)
+    body = await payload.read(4)
     assert body == b'body'
 
 
@@ -254,7 +252,7 @@ def test_request_chunked(parser):
     msg, payload = messages[0]
     assert msg.chunked
     assert not upgrade
-    assert isinstance(payload, streams.FlowControlStreamReader)
+    assert isinstance(payload, streams.StreamReader)
 
 
 def test_conn_upgrade(parser):
@@ -315,7 +313,7 @@ def test_headers_connect(parser):
     messages, upgrade, tail = parser.feed_data(text)
     msg, payload = messages[0]
     assert upgrade
-    assert isinstance(payload, streams.FlowControlStreamReader)
+    assert isinstance(payload, streams.StreamReader)
 
 
 def test_headers_old_websocket_key1(parser):
@@ -519,7 +517,7 @@ def test_http_request_chunked_payload(parser):
 
     assert msg.chunked
     assert not payload.is_eof()
-    assert isinstance(payload, streams.FlowControlStreamReader)
+    assert isinstance(payload, streams.StreamReader)
 
     parser.feed_data(b'4\r\ndata\r\n4\r\nline\r\n0\r\n\r\n')
 

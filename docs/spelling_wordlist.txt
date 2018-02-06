@@ -44,9 +44,12 @@ cls
 cmd
 codec
 Codings
+committer
+committers
 config
 Config
 configs
+conjunction
 contextmanager
 CookieJar
 coroutine
@@ -187,6 +190,7 @@ pyenv
 pyflakes
 pytest
 Pytest
+Quickstart
 quote’s
 readonly
 readpayload
@@ -226,6 +230,7 @@ SocketSocketTransport
 ssl
 SSLContext
 startup
+subapplication
 subclasses
 submodules
 subpackage
