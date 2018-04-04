@@ -810,7 +810,11 @@ class TCPConnector(BaseConnector):
         fingerprint, hashfunc = self._get_fingerprint_and_hashfunc(req)
 
         try:
-            hosts = yield from self._resolve_host(req.url.raw_host, req.port)
+            # Cancelling this lookup should not cancel the underlying lookup
+            #  or else the cancel event will get broadcast to all the waiters
+            #  across all connections.
+            hosts = yield from asyncio.shield(
+                self._resolve_host(req.url.raw_host, req.port))
         except OSError as exc:
             # in case of proxy it is not ClientProxyConnectionError
             # it is problem of resolving proxy ip itself
