@@ -814,7 +814,7 @@ class TCPConnector(BaseConnector):
             #  or else the cancel event will get broadcast to all the waiters
             #  across all connections.
             hosts = yield from asyncio.shield(
-                self._resolve_host(req.url.raw_host, req.port))
+                self._resolve_host(req.url.raw_host, req.port), loop=self._loop)
         except OSError as exc:
             # in case of proxy it is not ClientProxyConnectionError
             # it is problem of resolving proxy ip itself
