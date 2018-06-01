@@ -38,3 +38,6 @@ __all__ = (client.__all__ +  # noqa
             'WSMsgType', 'WSCloseCode',
             'WebSocketError', 'WSMessage',
            ) + workers)
+
+__fbn__ = True
+
