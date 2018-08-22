@@ -1,5 +1,6 @@
 import collections
 import datetime
+import gzip
 import json
 import re
 from unittest import mock
@@ -10,7 +11,8 @@ from multidict import CIMultiDict
 from aiohttp import HttpVersion, HttpVersion10, HttpVersion11, hdrs, signals
 from aiohttp.payload import BytesPayload
 from aiohttp.test_utils import make_mocked_coro, make_mocked_request
-from aiohttp.web import ContentCoding, Response, StreamResponse, json_response
+from aiohttp.web import ContentCoding, Response, StreamResponse,\
+    json_response, async_json_response
 
 
 def make_request(method, path, headers=CIMultiDict(),
@@ -406,6 +408,17 @@ async def test_force_compression_no_accept_gzip():
     msg = await resp.prepare(req)
     msg.enable_compression.assert_called_with('gzip')
     assert 'gzip' == resp.headers.get(hdrs.CONTENT_ENCODING)
+
+
+async def test_change_content_threaded_compression_enabled():
+    req = make_request('GET', '/')
+    body_thread_size = 1024
+    body = b'answer' * body_thread_size
+    resp = Response(body=body,
+                    zlib_thread_size=body_thread_size)
+    resp.enable_compression(ContentCoding.gzip)
+    await resp.prepare(req)
+    assert gzip.decompress(resp._compressed_body) == body
 
 
 async def test_change_content_length_if_compression_enabled():
@@ -1093,6 +1106,34 @@ def test_text_with_empty_payload():
 def test_response_with_content_length_header_without_body():
     resp = Response(headers={'Content-Length': 123})
     assert resp.content_length == 123
+
+
+async def test_async_json_small_response():
+    text = 'jaysawn'
+    resp = await async_json_response(text=json.dumps(text))
+    assert resp.text == json.dumps(text)
+
+    resp = await async_json_response(text)
+    assert resp.text == json.dumps(text)
+
+    with pytest.raises(ValueError):
+        await async_json_response(text, body=text)
+
+
+async def test_async_json_large_response():
+    cuttoff_length = 1024
+    text = 'ja' * cuttoff_length
+    resp = await async_json_response(text, executor_body_size=cuttoff_length)
+    assert resp.text == json.dumps(text)
+
+
+async def test_async_json_coro_response():
+    async def dumps(data):
+        return json.dumps(data)
+
+    text = 'jaysawn'
+    resp = await async_json_response(text, dumps=dumps)
+    assert resp.text == json.dumps(text)
 
 
 class TestJSONResponse:
