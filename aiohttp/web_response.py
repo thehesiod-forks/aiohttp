@@ -352,7 +352,9 @@ class StreamResponse(collections.MutableMapping, HeadersMixin):
 
         headers.setdefault(CONTENT_TYPE, 'application/octet-stream')
         headers.setdefault(DATE, rfc822_formatted_time())
-        headers.setdefault(SERVER, SERVER_SOFTWARE)
+
+        # -- FBN -- disabled
+        # headers.setdefault(SERVER, SERVER_SOFTWARE)
 
         # connection header
         if CONNECTION not in headers:
