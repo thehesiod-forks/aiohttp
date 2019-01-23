@@ -393,7 +393,9 @@ class StreamResponse(BaseClass, HeadersMixin):
 
         headers.setdefault(hdrs.CONTENT_TYPE, 'application/octet-stream')
         headers.setdefault(hdrs.DATE, rfc822_formatted_time())
-        headers.setdefault(hdrs.SERVER, SERVER_SOFTWARE)
+
+        # -- FBN -- disabled
+        # headers.setdefault(hdrs.SERVER, SERVER_SOFTWARE)
 
         # connection header
         if hdrs.CONNECTION not in headers:

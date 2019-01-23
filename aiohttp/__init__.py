@@ -214,3 +214,5 @@ try:
     __all__ += ('GunicornWebWorker', 'GunicornUVLoopWebWorker')
 except ImportError:  # pragma: no cover
     pass
+
+__fbn__ = True
