@@ -26,6 +26,7 @@ from typing import (  # noqa
     Type,
     Union,
     cast,
+    KeysView
 )
 
 import attr
@@ -170,6 +171,67 @@ class _TransportPlaceholder:
         pass
 
 
+class KeyedCondition:
+    def __init__(self):
+        # NOTE: asyncio.Lock + asyncio.Condition are FIFO
+        self._keyed_cond: Dict[ConnectionKey, asyncio.Condition] = dict()
+
+        # if we wanted to peek into asyncio.Condition._waiters this variable would not be necessary
+        self._num_waiters: Dict[ConnectionKey, int] = dict()
+
+    def keys(self) -> KeysView[ConnectionKey]:
+        return self._keyed_cond.keys()
+
+    async def wait(self, key: ConnectionKey):
+        cond = self._keyed_cond.get(key)
+        if not cond:
+            cond = self._keyed_cond[key] = asyncio.Condition()
+
+        async with cond:
+            try:
+                if key not in self._num_waiters:
+                    self._num_waiters[key] = 1
+                else:
+                    self._num_waiters[key] += 1
+
+                await cond.wait()
+            finally:
+                self._num_waiters[key] -= 1
+
+    def _notify_key(self, cond: asyncio.Condition, key: ConnectionKey):
+        # if we made it here the condition may have gotten cleared so
+        # so we may still KeyError on the line below
+        assert self._num_waiters[key] > 0
+        cond.notify(1)
+
+        # it's critical that there are now async calls below this line to
+        # assure consistency of self._keyed_cond
+        self._num_waiters[key] -= 1
+
+        if self._num_waiters[key] == 0:
+            del self._num_waiters[key]
+            del self._keyed_cond[key]
+
+    async def notify_random(self):
+        for key in random.shuffle(self._keyed_cond.keys()):
+            if await self.notify(key):
+                return
+
+    async def notify(self, key: ConnectionKey) -> bool:
+        cond = self._keyed_cond.get(key)
+        if not cond:
+            return False
+
+        async with cond:
+            try:
+                self._notify_key(cond, key)
+                return True
+            except KeyError:
+                pass  # key may have gotten cleared via self.notify_random_key
+
+        return False
+
+
 class BaseConnector:
     """Base connector class.
 
@@ -190,10 +252,10 @@ class BaseConnector:
     _cleanup_closed_period = 2.0
 
     def __init__(self, *,
-                 keepalive_timeout: Union[object, None, float]=sentinel,
-                 force_close: bool=False,
-                 limit: int=100, limit_per_host: int=0,
-                 enable_cleanup_closed: bool=False) -> None:
+                 keepalive_timeout: Union[object, None, float] = sentinel,
+                 force_close: bool = False,
+                 limit: int = 100, limit_per_host: int = 0,
+                 enable_cleanup_closed: bool = False) -> None:
 
         if force_close:
             if keepalive_timeout is not None and \
@@ -219,7 +281,7 @@ class BaseConnector:
         self._force_close = force_close
 
         # {host_key: FIFO list of waiters}
-        self._waiters = defaultdict(deque)  # type: ignore
+        self._waiters: KeyedCondition = KeyedCondition()
 
         self._loop = loop
         self._factory = functools.partial(ResponseHandler, loop=loop)
@@ -235,7 +297,7 @@ class BaseConnector:
         self._cleanup_closed_transports = []  # type: List[Optional[asyncio.Transport]]  # noqa
         self._cleanup_closed()
 
-    def __del__(self, _warnings: Any=warnings) -> None:
+    def __del__(self, _warnings: Any = warnings) -> None:
         if self._closed:
             return
         if not self._conns:
@@ -458,34 +520,11 @@ class BaseConnector:
 
         # Wait if there are no available connections.
         if available <= 0:
-            fut = self._loop.create_future()
-
-            # This connection will now count towards the limit.
-            waiters = self._waiters[key]
-            waiters.append(fut)
-
             if traces:
                 for trace in traces:
                     await trace.send_connection_queued_start()
 
-            try:
-                await fut
-            except BaseException as e:
-                # remove a waiter even if it was cancelled, normally it's
-                #  removed when it's notified
-                try:
-                    waiters.remove(fut)
-                except ValueError:  # fut may no longer be in list
-                    pass
-
-                raise e
-            finally:
-                if not waiters:
-                    try:
-                        del self._waiters[key]
-                    except KeyError:
-                        # the key was evicted before.
-                        pass
+            await self._waiters.wait(key)
 
             if traces:
                 for trace in traces:
@@ -558,7 +597,7 @@ class BaseConnector:
 
     def _release_waiter(self) -> None:
         """
-        Iterates over all waiters till found one that is not finsihed and
+        Iterates over all waiters till found one that is not finished and
         belongs to a host that has available connections.
         """
         if not self._waiters:
@@ -566,20 +605,16 @@ class BaseConnector:
 
         # Having the dict keys ordered this avoids to iterate
         # at the same order at each call.
-        queues = list(self._waiters.keys())
-        random.shuffle(queues)
+        conn_keys = list(self._waiters.keys())
+        random.shuffle(conn_keys)
 
-        for key in queues:
+        for key in conn_keys:
             if self._available_connections(key) < 1:
                 continue
 
-            waiters = self._waiters[key]
-            while waiters:
-                waiter = waiters.popleft()
-                if not waiter.done():
-                    waiter.set_result(None)
-                    return
-
+            if await self._waiters.notify(key):
+                return
+    
     def _release_acquired(self, key: 'ConnectionKey',
                           proto: ResponseHandler) -> None:
         if self._closed:
@@ -590,14 +625,14 @@ class BaseConnector:
             self._acquired.remove(proto)
             self._drop_acquired_per_host(key, proto)
         except KeyError:  # pragma: no cover
-            # this may be result of undetermenistic order of objects
+            # this may be result of undeterministic order of objects
             # finalization due garbage collection.
             pass
         else:
             self._release_waiter()
 
     def _release(self, key: 'ConnectionKey', protocol: ResponseHandler,
-                 *, should_close: bool=False) -> None:
+                 *, should_close: bool = False) -> None:
         if self._closed:
             # acquired connection is already released on connector closing
             return
