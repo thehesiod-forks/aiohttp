@@ -96,7 +96,7 @@ class Connection:
     def __repr__(self) -> str:
         return 'Connection<{}>'.format(self._key)
 
-    def __del__(self, _warnings: Any=warnings) -> None:
+    def __del__(self, _warnings: Any = warnings) -> None:
         if self._protocol is not None:
             if PY_36:
                 kwargs = {'source': self}
@@ -468,7 +468,7 @@ class BaseConnector:
         finally:
             self._conns.clear()
             self._acquired.clear()
-            self._waiters.clear()
+            self._waiters = KeyedCondition()
             self._cleanup_handle = None
             self._cleanup_closed_transports.clear()
             self._cleanup_closed_handle = None
@@ -550,7 +550,7 @@ class BaseConnector:
                 if not self._closed:
                     self._acquired.remove(placeholder)
                     self._drop_acquired_per_host(key, placeholder)
-                    self._release_waiter()
+                    await self._release_waiter()
                 raise
             else:
                 if not self._closed:
@@ -595,7 +595,7 @@ class BaseConnector:
         del self._conns[key]
         return None
 
-    def _release_waiter(self) -> None:
+    async def _release_waiter(self) -> None:
         """
         Iterates over all waiters till found one that is not finished and
         belongs to a host that has available connections.
@@ -614,7 +614,7 @@ class BaseConnector:
 
             if await self._waiters.notify(key):
                 return
-    
+
     def _release_acquired(self, key: 'ConnectionKey',
                           proto: ResponseHandler) -> None:
         if self._closed:
@@ -629,7 +629,7 @@ class BaseConnector:
             # finalization due garbage collection.
             pass
         else:
-            self._release_waiter()
+            self._loop.create_task(self._release_waiter())
 
     def _release(self, key: 'ConnectionKey', protocol: ResponseHandler,
                  *, should_close: bool = False) -> None:
