@@ -213,7 +213,9 @@ class KeyedCondition:
             del self._keyed_cond[key]
 
     async def notify_random(self):
-        for key in random.shuffle(self._keyed_cond.keys()):
+        keys = list(self.keys())
+        random.shuffle(keys)
+        for key in keys:
             if await self.notify(key):
                 return
 
