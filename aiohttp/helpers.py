@@ -447,7 +447,7 @@ class AccessLogger(AbstractAccessLogger):
 
     @staticmethod
     def _format_Tf(request, response, time):
-        return '%06f' % time
+        return round(time, 6)
 
     @staticmethod
     def _format_D(request, response, time):
